@@ -1,4 +1,4 @@
-#Set up required applications
+
 import yfinance as yf
 import matplotlib.pyplot as plt
 import numpy as np
@@ -31,20 +31,10 @@ data_mid_cap["Stock"] = "SIE.DE"
 data_small_cap["Stock"] = "RHM.DE"
 
 
-# ============================================
-# STEP 4 — RESET INDEX
-# ============================================
-
-# Convert Date index into normal column
 
 data_large_cap = data_large_cap.reset_index()
 data_mid_cap = data_mid_cap.reset_index()
 data_small_cap = data_small_cap.reset_index()
-
-
-# ============================================
-# STEP 5 — COMBINE DATASETS
-# ============================================
 
 combined_data = pd.concat([
     data_large_cap,
@@ -53,18 +43,10 @@ combined_data = pd.concat([
 ])
 
 
-# ============================================
-# STEP 6 — SORT BY DATE
-# ============================================
 
 combined_data = combined_data.sort_values(
     by=["Stock", "Date"]
 )
-
-
-# ============================================
-# STEP 7 — COMPUTE RETURNS
-# ============================================
 
 # Calculate percentage change in closing price
 # separately for each stock
@@ -76,16 +58,8 @@ combined_data["Return"] = (
 )
 
 
-# ============================================
-# STEP 8 — REMOVE NaN VALUES
-# ============================================
-
 combined_data = combined_data.dropna()
 
-
-# ============================================
-# STEP 9 — CHECK FINAL DATASET
-# ============================================
 
 print(combined_data.head())
 
@@ -94,11 +68,6 @@ print(combined_data.shape)
 
 print("\nMissing Values:")
 print(combined_data.isnull().sum())
-
-
-# ============================================
-# STEP 10 — PLOT RETURNS
-# ============================================
 
 plt.figure(figsize=(12, 6))
 
@@ -120,11 +89,6 @@ plt.ylabel("Returns")
 plt.legend()
 
 plt.show()
-
-
-# ============================================
-# STEP 11 — SAVE CLEAN DATASET
-# ============================================
 
 combined_data.to_csv(
     "combined_stock_data.csv",
