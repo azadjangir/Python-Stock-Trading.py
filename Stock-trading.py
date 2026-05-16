@@ -1,11 +1,9 @@
-# ── IMPORTS ──────────────────────────────────────────────
 import yfinance as yf
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import os
 
-# ── FETCH DATA ───────────────────────────────────────────
 tickers = {
     "SAP.DE": "large_cap",
     "SIE.DE": "mid_cap",
@@ -17,36 +15,28 @@ all_data = {}
 for ticker in tickers:
     df = yf.download(ticker, start="2021-01-01", end="2026-01-01", auto_adjust=True)
 
-    # FIX 1: Flatten multi-level column names from yfinance
     df.columns = [col[0] for col in df.columns]
 
     df["Stock"] = ticker
     df = df.reset_index()
     all_data[ticker] = df
 
-# ── COMBINE ──────────────────────────────────────────────
 combined_data = pd.concat(all_data.values()).sort_values(["Stock", "Date"]).reset_index(drop=True)
 
-# ── TASK 5: COMPUTE RETURNS ──────────────────────────────
-
-# Simple daily return
 combined_data["simple_return"] = (
     combined_data.groupby("Stock")["Close"].pct_change()
 )
 
-# Log daily return
 combined_data["log_return"] = (
     combined_data.groupby("Stock")["Close"]
     .transform(lambda x: np.log(x / x.shift(1)))
 )
 
-# FIX 2: 5-day FORWARD return — shift(-5) looks forward
 combined_data["forward_return_5d"] = (
     combined_data.groupby("Stock")["Close"]
     .transform(lambda x: (x.shift(-5) - x) / x)
 )
 
-# ── TASK 6: APPLY THRESHOLD LABELS ──────────────────────
 combined_data["y"] = np.where(
     combined_data["forward_return_5d"] > 0.005, 1,
     np.where(
@@ -63,7 +53,6 @@ print(f"Rows before dropping: {rows_before}")
 print(f"Rows after dropping:  {rows_after}")
 print(f"Rows lost:            {rows_before - rows_after}")
 
-# ── CLASS DISTRIBUTION ───────────────────────────────────
 print("\nClass distribution per ticker:")
 print(
     combined_data.groupby("Stock")["y"]
@@ -71,7 +60,6 @@ print(
     .mul(100).round(2)
 )
 
-# ── PLOT ─────────────────────────────────────────────────
 plt.figure(figsize=(12, 6))
 for stock in combined_data["Stock"].unique():
     stock_data = combined_data[combined_data["Stock"] == stock]
@@ -82,7 +70,6 @@ plt.ylabel("Return")
 plt.legend()
 plt.show()
 
-# ── TASK 7: SAVE TO data/raw/ ────────────────────────────
 os.makedirs("data/raw", exist_ok=True)
 
 for ticker in tickers:
