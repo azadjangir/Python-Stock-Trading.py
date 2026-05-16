@@ -1,98 +1,96 @@
-
+# ── IMPORTS ──────────────────────────────────────────────
 import yfinance as yf
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-data_large_cap = yf.download("SAP.DE", start="2021-01-01", end="2026-01-01")
-data_large_cap.index
-data_large_cap.shape
-data_large_cap.info()
-data_large_cap.isnull().sum()
-print(data_large_cap.index)
-print(data_large_cap.isnull().sum())
-print(data_large_cap.shape)
-print(data_large_cap.head())
-data_mid_cap= yf.download("SIE.DE", start="2021-01-01", end="2026-01-01")
-print(data_mid_cap.head())
-print(data_mid_cap.shape)
-data_mid_cap.index
-data_mid_cap.shape
-data_mid_cap.info()
-data_mid_cap.isnull().sum()
-data_small_cap= yf.download("RHM.DE", start="2021-01-01", end="2026-01-01")
-data_small_cap.index
-data_small_cap.shape
-data_small_cap.info()
-data_small_cap.isnull().sum()
-print(data_small_cap.head())
-print(data_small_cap.shape)
-data_large_cap["Stock"] = "SAP.DE"
-data_mid_cap["Stock"] = "SIE.DE"
-data_small_cap["Stock"] = "RHM.DE"
+import os
 
+# ── FETCH DATA ───────────────────────────────────────────
+tickers = {
+    "SAP.DE": "large_cap",
+    "SIE.DE": "mid_cap",
+    "RHM.DE": "volatile"
+}
 
+all_data = {}
 
-data_large_cap = data_large_cap.reset_index()
-data_mid_cap = data_mid_cap.reset_index()
-data_small_cap = data_small_cap.reset_index()
+for ticker in tickers:
+    df = yf.download(ticker, start="2021-01-01", end="2026-01-01", auto_adjust=True)
 
-combined_data = pd.concat([
-    data_large_cap,
-    data_mid_cap,
-    data_small_cap
-])
+    # FIX 1: Flatten multi-level column names from yfinance
+    df.columns = [col[0] for col in df.columns]
 
+    df["Stock"] = ticker
+    df = df.reset_index()
+    all_data[ticker] = df
 
+# ── COMBINE ──────────────────────────────────────────────
+combined_data = pd.concat(all_data.values()).sort_values(["Stock", "Date"]).reset_index(drop=True)
 
-combined_data = combined_data.sort_values(
-    by=["Stock", "Date"]
+# ── TASK 5: COMPUTE RETURNS ──────────────────────────────
+
+# Simple daily return
+combined_data["simple_return"] = (
+    combined_data.groupby("Stock")["Close"].pct_change()
 )
 
-# Calculate percentage change in closing price
-# separately for each stock
-
-combined_data["Return"] = (
-    combined_data
-    .groupby("Stock")["Close"]
-    .pct_change()
+# Log daily return
+combined_data["log_return"] = (
+    combined_data.groupby("Stock")["Close"]
+    .transform(lambda x: np.log(x / x.shift(1)))
 )
 
+# FIX 2: 5-day FORWARD return — shift(-5) looks forward
+combined_data["forward_return_5d"] = (
+    combined_data.groupby("Stock")["Close"]
+    .transform(lambda x: (x.shift(-5) - x) / x)
+)
 
-combined_data = combined_data.dropna()
-
-
-print(combined_data.head())
-
-print("\nDataset Shape:")
-print(combined_data.shape)
-
-print("\nMissing Values:")
-print(combined_data.isnull().sum())
-
-plt.figure(figsize=(12, 6))
-
-for stock in combined_data["Stock"].unique():
-
-    stock_data = combined_data[
-        combined_data["Stock"] == stock
-    ]
-
-    plt.plot(
-        stock_data["Date"],
-        stock_data["Return"],
-        label=stock
+# ── TASK 6: APPLY THRESHOLD LABELS ──────────────────────
+combined_data["y"] = np.where(
+    combined_data["forward_return_5d"] > 0.005, 1,
+    np.where(
+        combined_data["forward_return_5d"] < -0.005, 0,
+        np.nan
     )
+)
 
-plt.title("Stock Returns Over Time")
+rows_before = len(combined_data)
+combined_data = combined_data.dropna(subset=["y", "simple_return", "log_return", "forward_return_5d"])
+rows_after = len(combined_data)
+
+print(f"Rows before dropping: {rows_before}")
+print(f"Rows after dropping:  {rows_after}")
+print(f"Rows lost:            {rows_before - rows_after}")
+
+# ── CLASS DISTRIBUTION ───────────────────────────────────
+print("\nClass distribution per ticker:")
+print(
+    combined_data.groupby("Stock")["y"]
+    .value_counts(normalize=True)
+    .mul(100).round(2)
+)
+
+# ── PLOT ─────────────────────────────────────────────────
+plt.figure(figsize=(12, 6))
+for stock in combined_data["Stock"].unique():
+    stock_data = combined_data[combined_data["Stock"] == stock]
+    plt.plot(stock_data["Date"], stock_data["simple_return"], label=stock)
+plt.title("Daily Simple Returns Over Time")
 plt.xlabel("Date")
-plt.ylabel("Returns")
+plt.ylabel("Return")
 plt.legend()
-
 plt.show()
 
-combined_data.to_csv(
-    "combined_stock_data.csv",
-    index=False
-)
+# ── TASK 7: SAVE TO data/raw/ ────────────────────────────
+os.makedirs("data/raw", exist_ok=True)
 
-print("\nDataset saved successfully.")
+for ticker in tickers:
+    ticker_df = combined_data[combined_data["Stock"] == ticker]
+    ticker_df.to_csv(f"data/raw/{ticker.replace('.', '_')}.csv", index=False)
+    print(f"Saved: data/raw/{ticker.replace('.', '_')}.csv")
+
+print("\nFinal dataset shape:")
+print(combined_data.shape)
+print("\nSample rows:")
+print(combined_data[["Date", "Stock", "Close", "simple_return", "log_return", "forward_return_5d", "y"]].head(10))
